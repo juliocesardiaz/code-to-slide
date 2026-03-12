@@ -8,6 +8,7 @@ I developed this script to enhance technical instruction by generating high-qual
 - **Dynamic Font Scaling:** Automatically calculates the optimal font size to maximize legibility.
 - **Inline Line Numbers:** Facilitates direct referencing during lectures.
 - **Language Watermarks:** Subtle identification of syntax highlighting.
+- **Math Equation Slides:** Render LaTeX equations and TikZ/tikzcd diagrams alongside code.
 
 ## 🛠 Dependencies
 - `pygments`
@@ -15,7 +16,46 @@ I developed this script to enhance technical instruction by generating high-qual
 
 ## 💻 Usage
 ```bash
+# Single code file
+python main.py source.py -o slide.png
+
+# Side-by-side code comparison
 python main.py source.py --file2 comparison.c -o slide.png
+```
+
+## ∑ Math Equation Slides
+
+Create a `.math` file containing a LaTeX equation wrapped in `$$`:
+
+```
+$$\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+```
+
+For commutative diagrams and TikZ figures, add `\usepackage` declarations at the top of the file:
+
+```
+\usepackage{tikzcd}
+$$
+\begin{tikzcd}
+A \arrow[r, "f"] \arrow[d, "g"'] & B \arrow[d, "h"] \\
+C \arrow[r, "k"'] & D
+\end{tikzcd}
+$$
+```
+
+Supported TikZ packages: `tikzcd`, `tikz`, `pgf`, `pgfplots`, `circuitikz`, `pgfplotstable`.
+
+Standard equations are rendered with **KaTeX**. Files using TikZ packages are rendered with **TikZJax** (WebAssembly). Both are loaded from CDN automatically — no local LaTeX installation required.
+
+```bash
+# Single math slide
+python main.py equation.math -o slide.png
+
+# Side-by-side: code + equation
+python main.py source.py --file2 equation.math -o slide.png
+
+# Two equations side-by-side
+python main.py eq1.math --file2 eq2.math -o slide.png
 ```
 
 ---
