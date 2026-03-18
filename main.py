@@ -3,6 +3,7 @@ import sys
 import os
 import math
 import re
+import html
 from pygments import highlight
 from pygments.lexers import get_lexer_for_filename, guess_lexer, get_lexer_by_name
 from pygments.lexers.special import TextLexer
@@ -24,6 +25,27 @@ TIKZ_PACKAGES = {'tikzcd', 'tikz', 'pgf', 'pgfplots', 'circuitikz', 'pgfplotstab
 
 def is_math_file(path):
     return path is not None and path.endswith('.math')
+
+
+def is_mermaid_file(path):
+    return path is not None and path.endswith('.mmd')
+
+
+def parse_mermaid_file(file_path):
+    """Parse a .mmd file, stripping ```mermaid ... ``` fences if present."""
+    if not os.path.exists(file_path):
+        print(f"Error: File '{file_path}' not found.")
+        sys.exit(1)
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read().strip()
+
+    if content.startswith('```mermaid'):
+        content = content[len('```mermaid'):].strip()
+        if content.endswith('```'):
+            content = content[:-3].strip()
+
+    return content
 
 
 def parse_math_file(file_path):
@@ -118,6 +140,7 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
 
     uses_katex = False
     uses_tikzjax = False
+    uses_mermaid = False
     katex_scripts = []
     fs_css_parts = []
 
@@ -129,6 +152,19 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
         fs_css_parts.append(f".{slot} pre {{ font-size: {fs}px; }}")
         highlighted = highlight(code, lexer, formatter)
         return highlighted, lang_name, fs
+
+    def build_mermaid_panel(filepath):
+        nonlocal uses_mermaid
+        uses_mermaid = True
+        diagram = parse_mermaid_file(filepath)
+        # HTML-escape so browser doesn't interpret < > & inside the pre element
+        escaped = html.escape(diagram)
+        return (
+            f'<div class="mermaid-block">'
+            f'<pre class="mermaid">{escaped}</pre>'
+            f'<div class="watermark">Mermaid</div>'
+            f'</div>'
+        )
 
     def build_math_panel(filepath, slot):
         nonlocal uses_katex, uses_tikzjax
@@ -165,9 +201,10 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
             ), None
 
     # Build panel 1
-    if is_math_file(file1):
-        panel1, _ = build_math_panel(file1, "1")
-        panel1_html = panel1
+    if is_mermaid_file(file1):
+        panel1_html = build_mermaid_panel(file1)
+    elif is_math_file(file1):
+        panel1_html, _ = build_math_panel(file1, "1")
     else:
         highlighted1, lang1_name, fs1 = build_code_panel(file1, lines1, "code1")
         panel1_html = (
@@ -180,9 +217,10 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
     # Build panel 2
     panel2_html = ""
     if file2:
-        if is_math_file(file2):
-            panel2, _ = build_math_panel(file2, "2")
-            panel2_html = panel2
+        if is_mermaid_file(file2):
+            panel2_html = build_mermaid_panel(file2)
+        elif is_math_file(file2):
+            panel2_html, _ = build_math_panel(file2, "2")
         else:
             highlighted2, lang2_name, fs2 = build_code_panel(file2, lines2, "code2")
             panel2_html = (
@@ -204,6 +242,10 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
             '<link rel="stylesheet" href="https://tikzjax.com/v1/fonts.css">\n'
             '    <script src="https://tikzjax.com/v1/tikzjax.js"></script>'
         )
+    if uses_mermaid:
+        extra_head_parts.append(
+            '<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>'
+        )
     extra_head = '\n    '.join(extra_head_parts)
 
     # Build KaTeX render script block
@@ -211,6 +253,30 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
     if katex_scripts:
         inner = '\n        '.join(katex_scripts)
         katex_render_block = f'<script>\n        {inner}\n    </script>'
+
+    # Build Mermaid init block (Ground Mode palette)
+    mermaid_init_block = ""
+    if uses_mermaid:
+        mermaid_init_block = (
+            "<script>\n"
+            "        mermaid.initialize({\n"
+            "            startOnLoad: false,\n"
+            "            theme: 'base',\n"
+            "            themeVariables: {\n"
+            f"                background: '{LAMP_BLACK}',\n"
+            f"                primaryColor: '{WET_CONCRETE}',\n"
+            f"                primaryTextColor: '{BONE}',\n"
+            f"                primaryBorderColor: '{BONE}',\n"
+            f"                lineColor: '{BONE}',\n"
+            "                secondaryColor: '#1A1816',\n"
+            f"                tertiaryColor: '{LAMP_BLACK}',\n"
+            f"                edgeLabelBackground: '{LAMP_BLACK}',\n"
+            f"                nodeTextColor: '{BONE}'\n"
+            "            }\n"
+            "        });\n"
+            "        mermaid.run();\n"
+            "    </script>"
+        )
 
     fs_css = '\n            '.join(fs_css_parts)
 
@@ -280,6 +346,26 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
                 max-width: 100%;
                 max-height: 80%;
             }}
+            .mermaid-block {{
+                flex: 1;
+                background-color: {bg} !important;
+                border: 1px solid {border};
+                padding: 40px;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                position: relative;
+            }}
+            .mermaid-block svg {{
+                max-width: 100%;
+                max-height: 80%;
+            }}
+            .mermaid-block pre {{
+                margin: 0;
+                white-space: pre;
+            }}
             .watermark {{
                 position: absolute;
                 bottom: 20px;
@@ -320,6 +406,7 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
             {panel2}
         </div>
         {katex_render_block}
+        {mermaid_init_block}
     </body>
     </html>
     """
@@ -336,6 +423,7 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
         panel1=panel1_html,
         panel2=panel2_html,
         katex_render_block=katex_render_block,
+        mermaid_init_block=mermaid_init_block,
     )
 
     with sync_playwright() as p:
@@ -343,7 +431,7 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
         page = browser.new_page(viewport={'width': SLIDE_WIDTH, 'height': SLIDE_HEIGHT}, device_scale_factor=2)
         page.set_content(html_content)
 
-        if uses_tikzjax:
+        if uses_tikzjax or uses_mermaid:
             page.wait_for_selector('svg', timeout=30000)
         else:
             page.wait_for_timeout(2000)
@@ -356,8 +444,8 @@ def generate_image(file1, file2=None, lines1=None, lines2=None, output="slide.pn
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Code-to-Slide with Dynamic Font Scaling.")
-    parser.add_argument("file1", help="Primary code or .math file")
-    parser.add_argument("--file2", help="Secondary file for side-by-side (code or .math)", default=None)
+    parser.add_argument("file1", help="Primary file: source code, .math, or .mmd")
+    parser.add_argument("--file2", help="Secondary file for side-by-side: source code, .math, or .mmd", default=None)
     parser.add_argument("--lines1", help="Line range (e.g., '10-25')", default=None)
     parser.add_argument("--lines2", help="Line range for file2", default=None)
     parser.add_argument("--output", "-o", help="Output file", default="slide.png")

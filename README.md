@@ -9,6 +9,7 @@ I developed this script to enhance technical instruction by generating high-qual
 - **Inline Line Numbers:** Facilitates direct referencing during lectures.
 - **Language Watermarks:** Subtle identification of syntax highlighting.
 - **Math Equation Slides:** Render LaTeX equations and TikZ/tikzcd diagrams alongside code.
+- **Mermaid Diagram Slides:** Render flowcharts, sequence diagrams, ER diagrams, and more.
 
 ## 🛠 Dependencies
 - `pygments`
@@ -56,6 +57,30 @@ python main.py source.py --file2 equation.math -o slide.png
 
 # Two equations side-by-side
 python main.py eq1.math --file2 eq2.math -o slide.png
+```
+
+## ◈ Mermaid Diagram Slides
+
+Create a `.mmd` file using the standard markdown code fence syntax:
+
+````
+```mermaid
+graph TD
+    A[Start] --> B[Process] --> C[End]
+```
+````
+
+All Mermaid diagram types are supported: flowcharts, sequence diagrams, class diagrams, ER diagrams, Gantt charts, and more. The diagrams are automatically styled to match the Ground Mode palette. Mermaid.js is loaded from CDN — no local installation required.
+
+```bash
+# Single diagram slide
+python main.py diagram.mmd -o slide.png
+
+# Side-by-side: code + diagram
+python main.py source.py --file2 diagram.mmd -o slide.png
+
+# Two diagrams side-by-side
+python main.py flow.mmd --file2 sequence.mmd -o slide.png
 ```
 
 ---
